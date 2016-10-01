@@ -85,16 +85,33 @@ func NewBinding(i int, meth *deftree.ServiceMethod) *Binding {
 			ProtobufLabel: field.Label,
 			LocalName:     fmt.Sprintf("%s%s", gogen.CamelCase(field.GetName()), gogen.CamelCase(meth.GetName())),
 		}
+
+		if field.Label == "LABEL_REPEATED" {
+			nField.Repeated = true
+		}
 		var gt string
 		var ok bool
 		tmap := clientarggen.ProtoToGoTypeMap
 		if gt, ok = tmap[nField.ProtobufType]; !ok {
-			gt = "string"
+			//gt = "string"
 			nField.IsBaseType = false
+			tn := field.Type.GetName()
+			sections := strings.Split(tn, ".")
+			tn = sections[len(sections)-1]
+			gt = "pb." + tn
 		} else {
 			nField.IsBaseType = true
 		}
+
 		nField.GoType = gt
+		if nField.Repeated {
+			if nField.IsBaseType {
+				nField.GoType = "[]" + nField.GoType
+			} else {
+				nField.GoType = "[]*" + nField.GoType
+			}
+		}
+
 		nField.ConvertFunc = createDecodeConvertFunc(nField)
 		nField.TypeConversion = createDecodeTypeConversion(nField)
 
@@ -112,7 +129,7 @@ func NewBinding(i int, meth *deftree.ServiceMethod) *Binding {
 				nField.Name,
 				nField.ProtobufType)
 		}
-		if field.Label == "LABEL_REPEATED" && nField.Location == "path" {
+		if nField.Repeated && nField.Location == "path" {
 			log.Warnf(
 				"%s.%s is a repeated field specified to be in the path. "+
 					"Repeated fields are not supported in the path and may"+
@@ -181,17 +198,17 @@ func (b *Binding) PathSections() []string {
 // GenQueryUnmarshaler returns the generated code for server-side unmarshaling
 // of a query parameter into it's correct field on the request struct.
 func (f *Field) GenQueryUnmarshaler() (string, error) {
-	repeatedQueryLogic := `
-for _, {{.LocalName}}Str := range r.URL.Query()["{{.Name}}"] {
-	{{.ConvertFunc}}
-	if err != nil {
-		fmt.Printf("Error while extracting {{.LocalName}} from {{.Location}}: %v\n", err)
-		fmt.Printf("{{.Location}}Params: %v\n", {{.Location}}Params)
-		return nil, err
-	}
-	req.{{.CamelName}} = append(req.{{.CamelName}}, {{.TypeConversion}})
-}
-`
+	//repeatedQueryLogic := `
+	//for _, {{.LocalName}}Str := range r.URL.Query()["{{.Name}}"] {
+	//{{.ConvertFunc}}
+	//if err != nil {
+	//fmt.Printf("Error while extracting {{.LocalName}} from {{.Location}}: %v\n", err)
+	//fmt.Printf("{{.Location}}Params: %v\n", {{.Location}}Params)
+	//return nil, err
+	//}
+	//req.{{.CamelName}} = append(req.{{.CamelName}}, {{.TypeConversion}})
+	//}
+	//`
 	genericLogic := `
 {{.LocalName}}Str := {{.Location}}Params["{{.Name}}"]
 {{.ConvertFunc}}
@@ -204,9 +221,10 @@ if err != nil {
 req.{{.CamelName}} = {{.TypeConversion}}
 `
 	var selected string
-	if f.Location == "query" && f.ProtobufLabel == "LABEL_REPEATED" {
-		selected = repeatedQueryLogic
-	} else if f.Location != "body" {
+	//if f.Location == "query" && f.ProtobufLabel == "LABEL_REPEATED" {
+	//selected = repeatedQueryLogic
+	//} else if f.Location != "body" {
+	if f.Location != "body" {
 		selected = genericLogic
 	}
 	code, err := ApplyTemplate("FieldEncodeLogic", selected, f, TemplateFuncs)
@@ -238,6 +256,28 @@ func createDecodeConvertFunc(f Field) string {
 		fType = "%s, err := strconv.ParseFloat(%s, 64)"
 	case strings.Contains(f.GoType, "string"):
 		fType = "%s := %s"
+	}
+	if !f.IsBaseType || f.Repeated {
+		var preamble string
+		if !f.IsBaseType && !f.Repeated {
+			preamble = `
+var {{.LocalName}} *{{.GoType}}
+{{.LocalName}} = &{{.GoType}}{}
+err = json.Unmarshal([]byte({{.LocalName}}Str), {{.LocalName}})`
+		} else {
+			preamble = `
+var {{.LocalName}} {{.GoType}}
+err = json.Unmarshal([]byte({{.LocalName}}Str), &{{.LocalName}})`
+		}
+		jsonConvTmpl := preamble + `
+if err != nil {
+	return nil, errors.Wrapf(err, "couldn't decode {{.LocalName}} from %v", {{.LocalName}}Str)
+}`
+		code, err := ApplyTemplate("UnmarshalNonBaseType", jsonConvTmpl, f, nil)
+		if err != nil {
+			panic(fmt.Sprintf("Couldn't apply template: %v", err))
+		}
+		return code
 	}
 	return fmt.Sprintf(fType, f.LocalName, f.LocalName+"Str")
 }
