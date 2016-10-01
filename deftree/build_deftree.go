@@ -157,6 +157,24 @@ func NewFile(
 		newFile.Services = append(newFile.Services, newSvc)
 	}
 
+	// Resolve message field types after all messages in this file have been
+	// accounted for.
+	for _, msg := range newFile.Messages {
+		for _, f := range msg.Fields {
+			tn := f.Type.Name
+			if !strings.Contains(tn, ".") {
+				continue
+			}
+			enm, err := findEnum(curNewDt, &newFile, tn)
+			if enm != nil {
+				f.Type.Enum = enm
+			}
+			if err != nil {
+				return nil, errors.Wrapf(err, "error while searching for enum %q", tn)
+			}
+		}
+	}
+
 	return &newFile, nil
 }
 
@@ -225,6 +243,34 @@ func findMessage(md *MicroserviceDefinition, newFile *ProtoFile, path string) (*
 		}
 	}
 	return nil, fmt.Errorf("couldn't find message")
+}
+
+// Finds an enum given a fully qualified name to that enum. The provided
+// path may be either a fully qualfied name of a enum, or just the bare name
+// for a enum.
+func findEnum(md *MicroserviceDefinition, nf *ProtoFile, path string) (*ProtoEnum, error) {
+	if path[0] == '.' {
+		parts := strings.Split(path, ".")
+		for _, file := range md.Files {
+			for _, enm := range file.Enums {
+				if parts[2] == enm.GetName() {
+					return enm, nil
+				}
+			}
+		}
+		for _, enm := range nf.Enums {
+			if parts[2] == enm.GetName() {
+				return enm, nil
+			}
+		}
+	} else {
+		for _, enm := range nf.Enums {
+			if path == enm.GetName() {
+				return enm, nil
+			}
+		}
+	}
+	return nil, nil
 }
 
 // NewService creates a new *ProtoService from a
