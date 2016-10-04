@@ -202,7 +202,7 @@ func newClientArg(methName string, field *deftree.MessageField) *ClientArg {
 
 	var ft string
 	var ok bool
-	log.WithField("Method", methName).WithField("Arg", newArg.Name).Warnf("type: %s", field.Type.GetName())
+	log.WithField("Method", methName).WithField("Arg", newArg.Name).Debugf("type: %s", field.Type.GetName())
 	// For types outside the base types, have flag treat them as strings
 	if ft, ok = ProtoToGoTypeMap[field.Type.GetName()]; !ok {
 		ft = "string"
