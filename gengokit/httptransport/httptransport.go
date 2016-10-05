@@ -37,8 +37,10 @@ func NewHelper(svc *deftree.ProtoService) *Helper {
 		PathParamsBuilder: pp,
 	}
 	for _, meth := range svc.Methods {
-		nMeth := NewMethod(meth)
-		rv.Methods = append(rv.Methods, nMeth)
+		if len(meth.HttpBindings) > 0 {
+			nMeth := NewMethod(meth)
+			rv.Methods = append(rv.Methods, nMeth)
+		}
 	}
 	return &rv
 }
@@ -121,13 +123,13 @@ func NewBinding(i int, meth *deftree.ServiceMethod) *Binding {
 		nBinding.Fields = append(nBinding.Fields, &nField)
 
 		// Emit warnings for certain cases
-		if !nField.IsBaseType {
-			log.Warnf("%s.%s is a custom type '%s', only base types and repeated base "+
-				"types are supported. As a result, the generated HTTP "+
-				"transport will fail to compile. Remove non-base types.",
+		if !nField.IsBaseType && nField.Location != "body" {
+			log.Warnf(
+				"%s.%s is a non-base type specified to be located outside of "+
+					"the body. Non-base types outside the body may result in "+
+					"generated code which fails to compile.",
 				meth.GetName(),
-				nField.Name,
-				nField.ProtobufType)
+				nField.Name)
 		}
 		if nField.Repeated && nField.Location == "path" {
 			log.Warnf(

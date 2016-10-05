@@ -21,7 +21,7 @@ func {{$i.GetName}}({{with index $templateExecutor.ClientArgs.MethArgs $i.GetNam
 	request := pb.{{GoName $i.RequestType.GetName}}{
 {{- with $meth := index $templateExecutor.ClientArgs.MethArgs $i.GetName -}}
 	{{range $param := $meth.Args -}}
-		{{- if and (not $param.IsBaseType) (not $param.Repeated)}}
+		{{- if and (and (not $param.IsBaseType) (not $param.Repeated)) (not $param.Enum)}}
 		{{GoName $param.Name}} : &{{GoName $param.GoArg}},
 		{{- else }}
 		{{GoName $param.Name}} : {{GoName $param.GoArg}},

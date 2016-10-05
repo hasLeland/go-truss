@@ -33,6 +33,7 @@ var (
 	_ = strconv.Atoi
 	_ = httptransport.NewServer
 	_ = ioutil.NopCloser
+	_ = pb.Register{{$templateExecutor.Service.GetName}}Server
 )
 
 // MakeHTTPHandler returns a handler that makes a set of endpoints available

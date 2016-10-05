@@ -68,6 +68,9 @@ type ClientArg struct {
 	// given an identifier of "repeated", meaning it will represented in Go as
 	// a slice of it's type.
 	Repeated bool
+	// Enum is true if this arg corresponds to a protobuf field which is an
+	// enum type.
+	Enum bool
 }
 
 // MethodArgs is a struct containing a slice of all the ClientArgs for this
@@ -200,6 +203,11 @@ func newClientArg(methName string, field *deftree.MessageField) *ClientArg {
 	newArg.FlagName = fmt.Sprintf("%s.%s", strings.ToLower(methName), strings.ToLower(field.GetName()))
 	newArg.FlagArg = fmt.Sprintf("flag%s%s", generatego.CamelCase(newArg.Name), generatego.CamelCase(methName))
 
+	if field.Type.Enum != nil {
+		newArg.Enum = true
+		//log.WithField("Arg", newArg.Name).Warnf("is an Enum!")
+		//log.WithField("Arg", newArg.Name).WithField("Type name", field.Type.Name).Warnf("Not an enum")
+	}
 	var ft string
 	var ok bool
 	log.WithField("Method", methName).WithField("Arg", newArg.Name).Debugf("type: %s", field.Type.GetName())
@@ -221,7 +229,7 @@ func newClientArg(methName string, field *deftree.MessageField) *ClientArg {
 	if newArg.IsBaseType {
 		newArg.GoType = ProtoToGoTypeMap[field.Type.GetName()]
 	} else {
-		//newArg.GoType = "string"
+		// TODO: Have GoType derivation respect nested definitions
 		tn := field.Type.GetName()
 		sections := strings.Split(tn, ".")
 		tn = sections[len(sections)-1]
@@ -229,12 +237,11 @@ func newClientArg(methName string, field *deftree.MessageField) *ClientArg {
 	}
 	// The GoType is a slice of the GoType if it's a repeated field
 	if newArg.Repeated {
-		if newArg.IsBaseType {
+		if newArg.IsBaseType || newArg.Enum {
 			newArg.GoType = "[]" + newArg.GoType
 		} else {
 			newArg.GoType = "[]*" + newArg.GoType
 		}
-		//newArg.GoConvertFunc = GenerateCarveFunc(&newArg)
 	}
 
 	newArg.GoConvertInvoc = goConvInvoc(newArg)
@@ -248,10 +255,13 @@ func newClientArg(methName string, field *deftree.MessageField) *ClientArg {
 func goConvInvoc(a ClientArg) string {
 	jsonConvTmpl := `
 var {{.GoArg}} {{.GoType}}
-err = json.Unmarshal([]byte(*{{.FlagArg}}), &{{.GoArg}})
-if err != nil {
-	panic(errors.Wrapf(err, "unmarshalling {{.GoArg}} from %v:", {{.FlagArg}}))
-}`
+if {{.FlagArg}} != nil && len(*{{.FlagArg}}) > 0 {
+	err = json.Unmarshal([]byte(*{{.FlagArg}}), &{{.GoArg}})
+	if err != nil {
+		panic(errors.Wrapf(err, "unmarshalling {{.GoArg}} from %v:", {{.FlagArg}}))
+	}
+}
+`
 	if a.Repeated || !a.IsBaseType {
 		code, err := ApplyTemplate("UnmarshalCliArgs", jsonConvTmpl, a, nil)
 		if err != nil {

@@ -35,7 +35,7 @@ var (
 	_ = strings.Split
 	_ = json.Compact
 	_ = errors.Wrapf
-	_ = pb.Register{{$temlplateExecutor.Service.GetName}}Server
+	_ = pb.Register{{$templateExecutor.Service.GetName}}Server
 )
 
 
