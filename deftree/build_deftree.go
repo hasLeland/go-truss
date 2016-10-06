@@ -14,12 +14,24 @@ import (
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/golang/protobuf/protoc-gen-go/descriptor"
+	"github.com/golang/protobuf/protoc-gen-go/generator"
 	plugin "github.com/golang/protobuf/protoc-gen-go/plugin"
 	"github.com/pkg/errors"
 
 	"github.com/TuneLab/go-truss/deftree/svcparse"
 	"github.com/TuneLab/go-truss/truss/protostage"
 )
+
+var gengo *generator.Generator
+
+func initGenGo(req *plugin.CodeGeneratorRequest) {
+	gengo = generator.New()
+	gengo.Request = req
+	gengo.WrapTypes()
+	gengo.SetPackageNames()
+	gengo.BuildTypeNameMap()
+	gengo.GenerateAllFiles()
+}
 
 func init() {
 	// Output to stderr instead of stdout, could also be a file.
@@ -38,6 +50,8 @@ func init() {
 func New(req *plugin.CodeGeneratorRequest, serviceFile io.Reader) (Deftree, error) {
 	dt := MicroserviceDefinition{}
 	dt.SetName(findDeftreePackage(req))
+
+	initGenGo(req)
 
 	var svc *ProtoService
 	var serviceFileName string
@@ -211,6 +225,35 @@ func NewMessage(msg *descriptor.DescriptorProto) (*ProtoMessage, error) {
 		label := int32(field.GetLabel())
 		lname := descriptor.FieldDescriptorProto_Label_name[label]
 		newField.Label = lname
+
+		// Detect whether this message is a map type
+		// This code is sampled from the source of protoc-gen-go:
+		// https://github.com/golang/protobuf/blob/2c2f7268d78c9b309e301a6df31de3b6e4430dca/protoc-gen-go/generator/generator.go#L1816
+		if *field.Type == descriptor.FieldDescriptorProto_TYPE_MESSAGE {
+			// use the object map that protoc-gen-go uses
+			desc := gengo.ObjectNamed(field.GetTypeName())
+			if d, ok := desc.(*generator.Descriptor); ok && d.GetOptions().GetMapEntry() {
+				newField.IsMap = true
+			}
+		}
+		// Ensure this field is marked as an enum
+		if *field.Type == descriptor.FieldDescriptorProto_TYPE_ENUM {
+			obj := gengo.ObjectNamed(field.GetTypeName())
+			//if id, ok := obj.(*generator.ImportedDescriptor); ok {
+			//// It is an enum that was publicly imported.
+			//// We need the underlying type.
+			//obj = id.o
+			//}
+			enum, ok := obj.(*generator.EnumDescriptor)
+			if !ok {
+				return nil, errors.New(fmt.Sprintf("unknown enum type: %v", obj.TypeName()))
+			}
+			var err error
+			newField.Type.Enum, err = NewEnum(enum.EnumDescriptorProto)
+			if err != nil {
+				return nil, errors.Wrapf(err, "could not create custom enum %q", obj.TypeName())
+			}
+		}
 
 		newMsg.Fields = append(newMsg.Fields, &newField)
 	}

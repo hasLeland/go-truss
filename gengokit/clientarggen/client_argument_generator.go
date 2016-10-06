@@ -142,19 +142,6 @@ func (c *ClientServiceArgs) AllFlags() string {
 	return strings.Join(tmp, "\n")
 }
 
-// AllCarveFuncs returns the code for each carve function for each repeated field.
-//func (c *ClientServiceArgs) AllCarveFuncs() string {
-//tmp := []string{}
-//for _, m := range c.MethArgs {
-//for _, a := range m.Args {
-//if a.Repeated {
-//tmp = append(tmp, a.GoConvertFunc)
-//}
-//}
-//}
-//return strings.Join(tmp, "\n")
-//}
-
 var ProtoToGoTypeMap = map[string]string{
 	"TYPE_DOUBLE":   "float64",
 	"TYPE_FLOAT":    "float32",
@@ -181,6 +168,12 @@ func New(svc *deftree.ProtoService) *ClientServiceArgs {
 	for _, meth := range svc.Methods {
 		m := MethodArgs{}
 		for _, field := range meth.RequestType.Fields {
+			// Skip map fields, as they're currently incorrectly implemented by
+			// deftree
+			// TODO implement correct map support in client argument generation
+			if field.IsMap {
+				continue
+			}
 			newArg := newClientArg(meth.GetName(), field)
 			m.Args = append(m.Args, newArg)
 		}
@@ -205,8 +198,7 @@ func newClientArg(methName string, field *deftree.MessageField) *ClientArg {
 
 	if field.Type.Enum != nil {
 		newArg.Enum = true
-		//log.WithField("Arg", newArg.Name).Warnf("is an Enum!")
-		//log.WithField("Arg", newArg.Name).WithField("Type name", field.Type.Name).Warnf("Not an enum")
+		log.WithField("Method", methName).WithField("Arg", newArg.Name).Debugf("type: %s", field.Type.GetName())
 	}
 	var ft string
 	var ok bool
@@ -232,7 +224,10 @@ func newClientArg(methName string, field *deftree.MessageField) *ClientArg {
 		// TODO: Have GoType derivation respect nested definitions
 		tn := field.Type.GetName()
 		sections := strings.Split(tn, ".")
-		tn = sections[len(sections)-1]
+		// Extract everything after the package name
+		remaining := sections[2:]
+		tn = generatego.CamelCaseSlice(remaining)
+		//log.WithField("Method", methName).WithField("Arg", newArg.Name).Warnf("type: %v, %v", sections[2:], generatego.CamelCaseSlice(sections[2:]))
 		newArg.GoType = "pb." + tn
 	}
 	// The GoType is a slice of the GoType if it's a repeated field
@@ -250,8 +245,7 @@ func newClientArg(methName string, field *deftree.MessageField) *ClientArg {
 }
 
 // goConvInvoc returns the code for converting from the flagArg to the goArg,
-// either via a simple flagTypeConversion or via an invocation of a generated
-// carve function (in the case of an "repeated" arg).
+// either via a simple flagTypeConversion or via JSON unmarshalling
 func goConvInvoc(a ClientArg) string {
 	jsonConvTmpl := `
 var {{.GoArg}} {{.GoType}}

@@ -95,7 +95,7 @@ func nameServiceNameClientClient_mainGotemplate() (*asset, error) {
 		return nil, err
 	}
 
-	info := bindataFileInfo{name: "NAME-service/NAME-client/client_main.gotemplate", size: 4998, mode: os.FileMode(436), modTime: time.Unix(1475611934, 0)}
+	info := bindataFileInfo{name: "NAME-service/NAME-client/client_main.gotemplate", size: 4998, mode: os.FileMode(436), modTime: time.Unix(1475771010, 0)}
 	a := &asset{bytes: bytes, info: info}
 	return a, nil
 }
@@ -235,7 +235,7 @@ func nameServiceGeneratedTransport_httpGotemplate() (*asset, error) {
 		return nil, err
 	}
 
-	info := bindataFileInfo{name: "NAME-service/generated/transport_http.gotemplate", size: 4169, mode: os.FileMode(436), modTime: time.Unix(1475692743, 0)}
+	info := bindataFileInfo{name: "NAME-service/generated/transport_http.gotemplate", size: 4169, mode: os.FileMode(436), modTime: time.Unix(1475771010, 0)}
 	a := &asset{bytes: bytes, info: info}
 	return a, nil
 }
@@ -255,7 +255,7 @@ func nameServiceHandlersClientClient_handlerGotemplate() (*asset, error) {
 		return nil, err
 	}
 
-	info := bindataFileInfo{name: "NAME-service/handlers/client/client_handler.gotemplate", size: 1069, mode: os.FileMode(436), modTime: time.Unix(1475693819, 0)}
+	info := bindataFileInfo{name: "NAME-service/handlers/client/client_handler.gotemplate", size: 1069, mode: os.FileMode(436), modTime: time.Unix(1475771010, 0)}
 	a := &asset{bytes: bytes, info: info}
 	return a, nil
 }
