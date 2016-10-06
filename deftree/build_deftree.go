@@ -14,6 +14,7 @@ import (
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/golang/protobuf/protoc-gen-go/descriptor"
+	"github.com/golang/protobuf/protoc-gen-go/generator"
 	plugin "github.com/golang/protobuf/protoc-gen-go/plugin"
 	"github.com/pkg/errors"
 
@@ -33,11 +34,24 @@ func init() {
 	log.SetLevel(log.InfoLevel)
 }
 
+var gengo *generator.Generator
+
+func initGenGo(req *plugin.CodeGeneratorRequest) {
+	gengo = generator.New()
+	gengo.Request = req
+	gengo.WrapTypes()
+	gengo.SetPackageNames()
+	gengo.BuildTypeNameMap()
+	gengo.GenerateAllFiles()
+}
+
 // New accepts a Protobuf plugin.CodeGeneratorRequest and the contents of the
 // file containing the service declaration and returns a Deftree struct
 func New(req *plugin.CodeGeneratorRequest, serviceFile io.Reader) (Deftree, error) {
 	dt := MicroserviceDefinition{}
 	dt.SetName(findDeftreePackage(req))
+
+	initGenGo(req)
 
 	var svc *ProtoService
 	var serviceFileName string
@@ -139,6 +153,7 @@ func NewFile(
 	}
 
 	for _, msg := range pfile.MessageType {
+		msg.GetOptions().GetMapEntry()
 		newMsg, err := NewMessage(msg)
 		if err != nil {
 			return nil, errors.Wrapf(err, "error converting message %q", msg.GetName())
@@ -211,6 +226,14 @@ func NewMessage(msg *descriptor.DescriptorProto) (*ProtoMessage, error) {
 		label := int32(field.GetLabel())
 		lname := descriptor.FieldDescriptorProto_Label_name[label]
 		newField.Label = lname
+
+		if *field.Type == descriptor.FieldDescriptorProto_TYPE_MESSAGE {
+			// use the object map that protoc-gen-go uses
+			desc := gengo.ObjectNamed(field.GetTypeName())
+			if d, ok := desc.(*generator.Descriptor); ok && d.GetOptions().GetMapEntry() {
+				newField.IsMap = true
+			}
+		}
 
 		newMsg.Fields = append(newMsg.Fields, &newField)
 	}
@@ -318,7 +341,6 @@ func NewService(
 // type of the field being examined.
 func getCorrectTypeName(p *descriptor.FieldDescriptorProto) string {
 	rv := p.GetTypeName()
-
 	if rv == "" {
 		rv = p.Type.String()
 	}

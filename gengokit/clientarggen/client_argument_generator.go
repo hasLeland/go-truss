@@ -181,6 +181,11 @@ func New(svc *deftree.ProtoService) *ClientServiceArgs {
 	for _, meth := range svc.Methods {
 		m := MethodArgs{}
 		for _, field := range meth.RequestType.Fields {
+			// Maps are currently not supported on the cliclient
+			if field.IsMap {
+				fmt.Println(field.Name, "IS MAP")
+				continue
+			}
 			newArg := newClientArg(meth.GetName(), field)
 			m.Args = append(m.Args, newArg)
 		}
