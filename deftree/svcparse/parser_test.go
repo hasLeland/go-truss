@@ -573,3 +573,40 @@ service FlowCombination {
 		t.Fatalf("Returned service is nil\n")
 	}
 }
+
+func TestNoHTTPOption(t *testing.T) {
+	r := strings.NewReader(`
+service ExmplSrvc {
+	rpc SomeMethod(EmptyProto) returns (EmptyProto) {
+		/* some comment */
+
+		// some other comment
+	}
+}
+	`)
+	lex := NewSvcLexer(r)
+	svc, err := ParseService(lex)
+
+	if err != nil {
+		t.Error(err)
+	}
+	if svc == nil {
+		t.Fatalf("Returned service is nil")
+	}
+}
+
+func TestInvalidRPC(t *testing.T) {
+	r := strings.NewReader(`
+service ExmplSrvc {
+	rpc SomeMethod(EmptyProto) returns (EmptyProto) {
+		invaliddatahere
+	}
+}
+	`)
+	lex := NewSvcLexer(r)
+	_, err := ParseService(lex)
+
+	if err == nil {
+		t.Fatal("Expected error on invalid data in RPC")
+	}
+}
