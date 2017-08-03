@@ -106,7 +106,7 @@ func Run(cfg Config, logger log.Logger) {
 			return
 		}
 
-		srv := svc.MakeGRPCServer(ctx, endpoints)
+		srv := svc.MakeGRPCServer(endpoints)
 		s := grpc.NewServer()
 		pb.Register{{.Service.Name}}Server(s, srv)
 
